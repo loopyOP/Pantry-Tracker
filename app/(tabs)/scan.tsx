@@ -1,11 +1,24 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Text, View, StyleSheet, Button } from "react-native";
+import { Text, View, StyleSheet, Button, ActivityIndicator, Image, ScrollView } from "react-native";
 import { CameraView, Camera } from "expo-camera";
+
+interface ProductInfo {
+  product_name?: string;
+  brands?: string;
+  image_url?: string;
+  categories?: string;
+  ingredients_text?: string;
+  nutrition_grade?: string;
+  quantity?: string;
+}
 
 export default function Scan() {
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [scanned, setScanned] = useState(false);
   const [barcodeData, setBarcodeData] = useState<any>(null);
+  const [productInfo, setProductInfo] = useState<ProductInfo | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const scanTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -17,7 +30,38 @@ export default function Scan() {
     getCameraPermissions();
   }, []);
 
-  const handleBarcodeScanned = ({ type, data, bounds }: { type: string; data: string; bounds?: any }) => {
+  // Function to fetch product information from barcode
+  const fetchProductInfo = async (barcode: string): Promise<ProductInfo | null> => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      // Open Food Facts API - free and comprehensive for food products
+      const response = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`);
+      const data = await response.json();
+      
+      if (data.status === 1 && data.product) {
+        return {
+          product_name: data.product.product_name || data.product.product_name_en,
+          brands: data.product.brands,
+          image_url: data.product.image_front_url || data.product.image_url,
+          categories: data.product.categories,
+          ingredients_text: data.product.ingredients_text,
+          nutrition_grade: data.product.nutrition_grades,
+          quantity: data.product.quantity,
+        };
+      }
+      
+      return null;
+    } catch (err) {
+      console.error('Error fetching product info:', err);
+      throw new Error('Failed to fetch product information');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleBarcodeScanned = async ({ type, data, bounds }: { type: string; data: string; bounds?: any }) => {
     // Prevent multiple scans if already processed
     if (scanned) return;
     
@@ -30,10 +74,17 @@ export default function Scan() {
     setScanned(true);
     setBarcodeData({ type, data, bounds });
     
-    // Show alert after a brief delay to ensure UI state is updated
-    scanTimeoutRef.current = setTimeout(() => {
-      alert(`Bar code with type ${type} and data ${data} has been scanned!`);
-    }, 100);
+    // Fetch product information
+    try {
+      const product = await fetchProductInfo(data);
+      setProductInfo(product);
+      
+      if (!product) {
+        setError("Product not found in database");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unknown error occurred");
+    }
   };
 
   const resetScanner = () => {
@@ -45,6 +96,9 @@ export default function Scan() {
     
     setScanned(false);
     setBarcodeData(null);
+    setProductInfo(null);
+    setError(null);
+    setLoading(false);
   };
 
   // Cleanup timeout on component unmount
@@ -110,12 +164,67 @@ export default function Scan() {
       {/* Scan Results */}
       {scanned && (
         <View style={styles.resultContainer}>
-          <View style={styles.resultBox}>
-            <Text style={styles.resultTitle}>Barcode Scanned!</Text>
-            <Text style={styles.resultType}>Type: {barcodeData?.type}</Text>
-            <Text style={styles.resultData}>Data: {barcodeData?.data}</Text>
-            <Button title="Scan Again" onPress={resetScanner} />
-          </View>
+          <ScrollView style={styles.resultScrollView} showsVerticalScrollIndicator={false}>
+            <View style={styles.resultBox}>
+              {loading ? (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="large" color="#007AFF" />
+                  <Text style={styles.loadingText}>Looking up product...</Text>
+                </View>
+              ) : error ? (
+                <View style={styles.errorContainer}>
+                  <Text style={styles.errorTitle}>❌ {error}</Text>
+                  <Text style={styles.resultType}>Barcode: {barcodeData?.data}</Text>
+                  <Text style={styles.resultData}>Type: {barcodeData?.type}</Text>
+                </View>
+              ) : productInfo ? (
+                <View style={styles.productContainer}>
+                  <Text style={styles.productTitle}>
+                    {productInfo.product_name || "Unknown Product"}
+                  </Text>
+                  
+                  {productInfo.image_url && (
+                    <Image 
+                      source={{ uri: productInfo.image_url }} 
+                      style={styles.productImage}
+                      resizeMode="contain"
+                    />
+                  )}
+                  
+                  {productInfo.brands && (
+                    <Text style={styles.productBrand}>Brand: {productInfo.brands}</Text>
+                  )}
+                  
+                  {productInfo.quantity && (
+                    <Text style={styles.productDetail}>Quantity: {productInfo.quantity}</Text>
+                  )}
+                  
+                  {productInfo.categories && (
+                    <Text style={styles.productDetail}>
+                      Categories: {productInfo.categories.split(',').slice(0, 3).join(', ')}
+                    </Text>
+                  )}
+                  
+                  {productInfo.nutrition_grade && (
+                    <Text style={styles.nutritionGrade}>
+                      Nutrition Grade: {productInfo.nutrition_grade.toUpperCase()}
+                    </Text>
+                  )}
+                  
+                  <Text style={styles.barcodeInfo}>
+                    Barcode: {barcodeData?.data} ({barcodeData?.type})
+                  </Text>
+                </View>
+              ) : (
+                <View style={styles.errorContainer}>
+                  <Text style={styles.errorTitle}>Product not found</Text>
+                  <Text style={styles.resultData}>Barcode: {barcodeData?.data}</Text>
+                </View>
+              )}
+              
+              <Button title="Scan Again" onPress={resetScanner} />
+            </View>
+          </ScrollView>
         </View>
       )}
     </View>
@@ -166,22 +275,92 @@ const styles = StyleSheet.create({
   },
   resultContainer: {
     position: 'absolute',
-    bottom: 50,
-    left: 20,
-    right: 20,
-    alignItems: 'center',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    maxHeight: '70%',
+  },
+  resultScrollView: {
+    flex: 1,
   },
   resultBox: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    backgroundColor: 'rgba(255, 255, 255, 0.98)',
     padding: 20,
-    borderRadius: 15,
-    width: '100%',
-    alignItems: 'center',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    minHeight: 200,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 5,
+    shadowRadius: 8,
+    elevation: 10,
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    paddingVertical: 30,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: '#007AFF',
+    marginTop: 10,
+    fontWeight: '500',
+  },
+  errorContainer: {
+    alignItems: 'center',
+    paddingVertical: 20,
+  },
+  errorTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#FF3B30',
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  productContainer: {
+    alignItems: 'center',
+  },
+  productTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 15,
+    textAlign: 'center',
+  },
+  productImage: {
+    width: 120,
+    height: 120,
+    marginBottom: 15,
+    borderRadius: 8,
+  },
+  productBrand: {
+    fontSize: 16,
+    color: '#666',
+    marginBottom: 8,
+    fontWeight: '600',
+  },
+  productDetail: {
+    fontSize: 14,
+    color: '#555',
+    marginBottom: 6,
+    textAlign: 'center',
+  },
+  nutritionGrade: {
+    fontSize: 14,
+    color: '#34C759',
+    marginBottom: 10,
+    fontWeight: '600',
+    backgroundColor: '#F0F9F0',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  barcodeInfo: {
+    fontSize: 12,
+    color: '#999',
+    marginTop: 15,
+    marginBottom: 20,
+    textAlign: 'center',
+    fontFamily: 'monospace',
   },
   resultTitle: {
     fontSize: 18,
