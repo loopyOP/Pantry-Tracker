@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Text, View, StyleSheet, Button, ActivityIndicator, Image, ScrollView } from "react-native";
+import { Text, View, StyleSheet, Button, ActivityIndicator, Image, ScrollView, Alert, Pressable, TextInput, Platform } from "react-native";
 import { CameraView, Camera } from "expo-camera";
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { useFonts, PassionOne_400Regular } from '@expo-google-fonts/passion-one';
 
 interface ProductInfo {
   product_name?: string;
@@ -10,9 +13,17 @@ interface ProductInfo {
   ingredients_text?: string;
   nutrition_grade?: string;
   quantity?: string;
+  expiration_date?: string;
+  calories?: string;
+  nutriments?: any;
 }
 
 export default function Scan() {
+  // Load the Passion One font
+  const [fontsLoaded] = useFonts({
+    PassionOne_400Regular,
+  });
+
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [scanned, setScanned] = useState(false);
   const [barcodeData, setBarcodeData] = useState<any>(null);
@@ -20,6 +31,8 @@ export default function Scan() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const scanTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [manualExpirationDate, setManualExpirationDate] = useState<Date | undefined>(undefined);
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
   useEffect(() => {
     const getCameraPermissions = async () => {
@@ -29,6 +42,44 @@ export default function Scan() {
 
     getCameraPermissions();
   }, []);
+
+  // Function to save product to local storage
+  const saveProductToStorage = async () => {
+    if (!productInfo || !barcodeData) return;
+    
+    try {
+      const existingProducts = await AsyncStorage.getItem('scannedProducts');
+      const products = existingProducts ? JSON.parse(existingProducts) : [];
+      
+      // Use manual expiration date if set, otherwise use API data
+      const finalExpirationDate = manualExpirationDate 
+        ? manualExpirationDate.toISOString() 
+        : productInfo.expiration_date;
+      
+      // Add scan timestamp and barcode to product
+      const productWithMetadata = {
+        ...productInfo,
+        expiration_date: finalExpirationDate,
+        barcode: barcodeData.data,
+        scannedAt: new Date().toISOString(),
+      };
+      
+      // Check if product already exists, update it instead of adding duplicate
+      const existingIndex = products.findIndex((p: any) => p.barcode === barcodeData.data);
+      if (existingIndex !== -1) {
+        products[existingIndex] = productWithMetadata;
+      } else {
+        products.unshift(productWithMetadata); // Add to beginning of array
+      }
+      
+      await AsyncStorage.setItem('scannedProducts', JSON.stringify(products));
+      Alert.alert('Success', 'Product saved to your pantry!');
+      resetScanner();
+    } catch (error) {
+      console.error('Error saving product:', error);
+      Alert.alert('Error', 'Failed to save product to storage');
+    }
+  };
 
   // Function to fetch product information from barcode
   const fetchProductInfo = async (barcode: string): Promise<ProductInfo | null> => {
@@ -49,6 +100,9 @@ export default function Scan() {
           ingredients_text: data.product.ingredients_text,
           nutrition_grade: data.product.nutrition_grades,
           quantity: data.product.quantity,
+          expiration_date: data.product.expiration_date,
+          calories: data.product.nutriments?.["energy-kcal_100g"] || data.product.nutriments?.["energy-kcal"],
+          nutriments: data.product.nutriments,
         };
       }
       
@@ -82,6 +136,7 @@ export default function Scan() {
       if (!product) {
         setError("Product not found in database");
       }
+      // Note: Product is NOT automatically saved - user must confirm
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error occurred");
     }
@@ -99,6 +154,16 @@ export default function Scan() {
     setProductInfo(null);
     setError(null);
     setLoading(false);
+    setManualExpirationDate(undefined);
+    setShowDatePicker(false);
+  };
+
+  // Handle date picker change
+  const onDateChange = (event: any, selectedDate?: Date) => {
+    setShowDatePicker(Platform.OS === 'ios'); // Keep open on iOS
+    if (selectedDate) {
+      setManualExpirationDate(selectedDate);
+    }
   };
 
   // Cleanup timeout on component unmount
@@ -109,6 +174,14 @@ export default function Scan() {
       }
     };
   }, []);
+
+  if (!fontsLoaded) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <Text>Loading...</Text>
+      </View>
+    );
+  }
 
   if (hasPermission === null) {
     return <Text>Requesting for camera permission</Text>;
@@ -199,6 +272,51 @@ export default function Scan() {
                     <Text style={styles.productDetail}>Quantity: {productInfo.quantity}</Text>
                   )}
                   
+                  {productInfo.calories && (
+                    <Text style={styles.calorieInfo}>
+                      🔥 Calories: {parseFloat(productInfo.calories).toFixed(2)} kcal per 100g
+                    </Text>
+                  )}
+                  
+                  {(productInfo.expiration_date || manualExpirationDate) && (
+                    <Text style={styles.expirationInfo}>
+                      📅 Expires: {manualExpirationDate 
+                        ? manualExpirationDate.toLocaleDateString()
+                        : new Date(productInfo.expiration_date!).toLocaleDateString()}
+                    </Text>
+                  )}
+                  
+                  {!productInfo.expiration_date && !manualExpirationDate && (
+                    <View style={styles.addExpirationContainer}>
+                      <Text style={styles.noExpirationText}>No expiration date found</Text>
+                      <Pressable 
+                        style={styles.addExpirationButton}
+                        onPress={() => setShowDatePicker(true)}
+                      >
+                        <Text style={styles.addExpirationButtonText}>+ Add Expiration Date</Text>
+                      </Pressable>
+                    </View>
+                  )}
+                  
+                  {(productInfo.expiration_date || manualExpirationDate) && (
+                    <Pressable 
+                      style={styles.changeExpirationButton}
+                      onPress={() => setShowDatePicker(true)}
+                    >
+                      <Text style={styles.changeExpirationButtonText}>Change Date</Text>
+                    </Pressable>
+                  )}
+                  
+                  {showDatePicker && (
+                    <DateTimePicker
+                      value={manualExpirationDate || new Date()}
+                      mode="date"
+                      display="default"
+                      onChange={onDateChange}
+                      minimumDate={new Date()}
+                    />
+                  )}
+                  
                   {productInfo.categories && (
                     <Text style={styles.productDetail}>
                       Categories: {productInfo.categories.split(',').slice(0, 3).join(', ')}
@@ -214,15 +332,34 @@ export default function Scan() {
                   <Text style={styles.barcodeInfo}>
                     Barcode: {barcodeData?.data} ({barcodeData?.type})
                   </Text>
+                  
+                  <View style={styles.actionButtons}>
+                    <Pressable 
+                      style={styles.saveButton}
+                      onPress={saveProductToStorage}
+                    >
+                      <Text style={styles.saveButtonText}>✓ Add to Pantry</Text>
+                    </Pressable>
+                    <Pressable 
+                      style={styles.cancelButton}
+                      onPress={resetScanner}
+                    >
+                      <Text style={styles.cancelButtonText}>✕ Cancel</Text>
+                    </Pressable>
+                  </View>
                 </View>
               ) : (
                 <View style={styles.errorContainer}>
                   <Text style={styles.errorTitle}>Product not found</Text>
                   <Text style={styles.resultData}>Barcode: {barcodeData?.data}</Text>
+                  <Pressable 
+                    style={styles.cancelButton}
+                    onPress={resetScanner}
+                  >
+                    <Text style={styles.cancelButtonText}>Scan Again</Text>
+                  </Pressable>
                 </View>
               )}
-              
-              <Button title="Scan Again" onPress={resetScanner} />
             </View>
           </ScrollView>
         </View>
@@ -265,13 +402,14 @@ const styles = StyleSheet.create({
   instructionText: {
     color: '#FFFFFF',
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '400',
     marginTop: 20,
     textAlign: 'center',
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
     paddingHorizontal: 20,
     paddingVertical: 8,
     borderRadius: 20,
+    fontFamily: 'PassionOne_400Regular',
   },
   resultContainer: {
     position: 'absolute',
@@ -303,7 +441,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#007AFF',
     marginTop: 10,
-    fontWeight: '500',
+    fontWeight: '400',
+    fontFamily: 'PassionOne_400Regular',
   },
   errorContainer: {
     alignItems: 'center',
@@ -311,20 +450,22 @@ const styles = StyleSheet.create({
   },
   errorTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: '400',
     color: '#FF3B30',
     marginBottom: 10,
     textAlign: 'center',
+    fontFamily: 'PassionOne_400Regular',
   },
   productContainer: {
     alignItems: 'center',
   },
   productTitle: {
     fontSize: 20,
-    fontWeight: 'bold',
+    fontWeight: '400',
     color: '#333',
     marginBottom: 15,
     textAlign: 'center',
+    fontFamily: 'PassionOne_400Regular',
   },
   productImage: {
     width: 120,
@@ -336,23 +477,50 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
     marginBottom: 8,
-    fontWeight: '600',
+    fontWeight: '400',
+    fontFamily: 'PassionOne_400Regular',
   },
   productDetail: {
     fontSize: 14,
     color: '#555',
     marginBottom: 6,
     textAlign: 'center',
+    fontFamily: 'PassionOne_400Regular',
   },
   nutritionGrade: {
     fontSize: 14,
     color: '#34C759',
     marginBottom: 10,
-    fontWeight: '600',
+    fontWeight: '400',
     backgroundColor: '#F0F9F0',
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 12,
+    fontFamily: 'PassionOne_400Regular',
+  },
+  calorieInfo: {
+    fontSize: 15,
+    color: '#FF6B35',
+    marginBottom: 8,
+    fontWeight: '400',
+    backgroundColor: '#FFF5F2',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    textAlign: 'center',
+    fontFamily: 'PassionOne_400Regular',
+  },
+  expirationInfo: {
+    fontSize: 15,
+    color: '#5856D6',
+    marginBottom: 8,
+    fontWeight: '400',
+    backgroundColor: '#F3F3FF',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    textAlign: 'center',
+    fontFamily: 'PassionOne_400Regular',
   },
   barcodeInfo: {
     fontSize: 12,
@@ -364,19 +532,107 @@ const styles = StyleSheet.create({
   },
   resultTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: '400',
     color: '#333',
     marginBottom: 10,
+    fontFamily: 'PassionOne_400Regular',
   },
   resultType: {
     fontSize: 14,
     color: '#666',
     marginBottom: 5,
+    fontFamily: 'PassionOne_400Regular',
   },
   resultData: {
     fontSize: 12,
     color: '#888',
     marginBottom: 15,
     textAlign: 'center',
+    fontFamily: 'PassionOne_400Regular',
+  },
+  addExpirationContainer: {
+    marginVertical: 10,
+    padding: 12,
+    backgroundColor: '#FFF9E6',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#FFD700',
+    borderStyle: 'dashed',
+  },
+  noExpirationText: {
+    fontSize: 13,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 8,
+    fontFamily: 'PassionOne_400Regular',
+  },
+  addExpirationButton: {
+    backgroundColor: '#FFD700',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  addExpirationButtonText: {
+    color: '#333',
+    fontSize: 14,
+    fontWeight: '400',
+    fontFamily: 'PassionOne_400Regular',
+  },
+  changeExpirationButton: {
+    backgroundColor: '#E8E8E8',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    alignSelf: 'center',
+    marginVertical: 8,
+  },
+  changeExpirationButtonText: {
+    color: '#666',
+    fontSize: 12,
+    fontWeight: '400',
+    fontFamily: 'PassionOne_400Regular',
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 20,
+    gap: 10,
+  },
+  saveButton: {
+    flex: 1,
+    backgroundColor: '#03A903',
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  saveButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '400',
+    fontFamily: 'PassionOne_400Regular',
+  },
+  cancelButton: {
+    flex: 1,
+    backgroundColor: '#FF3B30',
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  cancelButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '400',
+    fontFamily: 'PassionOne_400Regular',
   },
 });
