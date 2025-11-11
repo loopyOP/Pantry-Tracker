@@ -1,9 +1,11 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useContext } from "react";
 import { Text, View, StyleSheet, Button, ActivityIndicator, Image, ScrollView, Alert, Pressable, TextInput, Platform } from "react-native";
 import { CameraView, Camera } from "expo-camera";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useFonts, PassionOne_400Regular } from '@expo-google-fonts/passion-one';
+import { AuthContext } from "@/contexts/AuthContext";
+import productService from "@/services/productService";
 
 interface ProductInfo {
   product_name?: string;
@@ -24,6 +26,7 @@ export default function Scan() {
     PassionOne_400Regular,
   });
 
+  const { token } = useContext(AuthContext);
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [scanned, setScanned] = useState(false);
   const [barcodeData, setBarcodeData] = useState<any>(null);
@@ -43,7 +46,7 @@ export default function Scan() {
     getCameraPermissions();
   }, []);
 
-  // Function to save product to local storage
+  // Function to save product to local storage and server
   const saveProductToStorage = async () => {
     if (!productInfo || !barcodeData) return;
     
@@ -73,7 +76,20 @@ export default function Scan() {
       }
       
       await AsyncStorage.setItem('scannedProducts', JSON.stringify(products));
-      Alert.alert('Success', 'Product saved to your pantry!');
+      
+      // If user is logged in, also save to server
+      if (token) {
+        try {
+          await productService.upsertProduct(productWithMetadata);
+          Alert.alert('Success', 'Product saved to your pantry and synced to cloud! ☁️');
+        } catch (serverError) {
+          console.error('Error syncing to server:', serverError);
+          Alert.alert('Success', 'Product saved locally. Will sync when connection is available.');
+        }
+      } else {
+        Alert.alert('Success', 'Product saved to your pantry!');
+      }
+      
       resetScanner();
     } catch (error) {
       console.error('Error saving product:', error);

@@ -1,13 +1,16 @@
 import { Text, View, StyleSheet, FlatList, Image, TouchableOpacity, Alert, Pressable, Modal, TextInput, TextInput as RNTextInput, Platform } from "react-native";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useContext } from "react";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import { useCallback } from 'react';
 import { useFonts, PassionOne_400Regular } from '@expo-google-fonts/passion-one';
 import * as Notifications from 'expo-notifications';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { AuthContext } from "@/contexts/AuthContext";
+import productService from "@/services/productService";
 
 interface SavedProduct {
+  id?: number; // Server ID (present after sync)
   product_name?: string;
   brands?: string;
   image_url?: string;
@@ -37,6 +40,7 @@ export default function Index() {
     PassionOne_400Regular,
   });
 
+  const { token } = useContext(AuthContext);
   const [products, setProducts] = useState<SavedProduct[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<SavedProduct[]>([]);
   const [loading, setLoading] = useState(true);
@@ -242,10 +246,36 @@ export default function Index() {
           text: 'Delete',
           style: 'destructive',
           onPress: async () => {
-            const updatedProducts = products.filter(p => p.barcode !== selectedProduct.barcode);
-            setProducts(updatedProducts);
-            await AsyncStorage.setItem('scannedProducts', JSON.stringify(updatedProducts));
-            await scheduleAllNotifications(updatedProducts);
+            try {
+              // If logged in, delete from server first
+              if (token) {
+                if (selectedProduct.id) {
+                  // Product has server ID, delete by ID
+                  await productService.deleteProduct(selectedProduct.id);
+                  console.log('Product deleted from server by ID');
+                } else {
+                  // Product doesn't have server ID, try deleting by barcode
+                  try {
+                    await productService.deleteProductByBarcode(selectedProduct.barcode);
+                    console.log('Product deleted from server by barcode');
+                  } catch (error) {
+                    // Product might not exist on server yet, that's okay
+                    console.log('Product not found on server, only deleting locally');
+                  }
+                }
+              }
+              
+              // Delete from local storage
+              const updatedProducts = products.filter(p => p.barcode !== selectedProduct.barcode);
+              setProducts(updatedProducts);
+              await AsyncStorage.setItem('scannedProducts', JSON.stringify(updatedProducts));
+              await scheduleAllNotifications(updatedProducts);
+              
+              Alert.alert('Deleted', 'Product removed from your pantry');
+            } catch (error) {
+              console.error('Error deleting product:', error);
+              Alert.alert('Error', 'Failed to delete product. Please try again.');
+            }
           },
         },
       ]
@@ -285,14 +315,24 @@ export default function Index() {
     
     setDatePickerVisible(false);
     
+    const updatedProduct = { ...selectedProduct, expiration_date: newExpirationDate.toISOString() };
     const updatedProducts = products.map(p =>
       p.barcode === selectedProduct.barcode
-        ? { ...p, expiration_date: newExpirationDate.toISOString() }
+        ? updatedProduct
         : p
     );
     setProducts(updatedProducts);
     await AsyncStorage.setItem('scannedProducts', JSON.stringify(updatedProducts));
     await scheduleAllNotifications(updatedProducts);
+    
+    // If logged in, sync to server
+    if (token) {
+      try {
+        await productService.upsertProduct(updatedProduct);
+      } catch (error) {
+        console.error('Error syncing expiration date update:', error);
+      }
+    }
   };
 
   const cancelExpirationDate = () => {
@@ -315,9 +355,10 @@ export default function Index() {
       return;
     }
 
+    const updatedProduct = { ...selectedProduct, alertDaysBefore: days };
     const updatedProducts = products.map(p => 
       p.barcode === selectedProduct.barcode 
-        ? { ...p, alertDaysBefore: days }
+        ? updatedProduct
         : p
     );
 
@@ -325,6 +366,15 @@ export default function Index() {
     await AsyncStorage.setItem('scannedProducts', JSON.stringify(updatedProducts));
     await scheduleAllNotifications(updatedProducts);
     setAlertModalVisible(false);
+    
+    // If logged in, sync to server
+    if (token) {
+      try {
+        await productService.upsertProduct(updatedProduct);
+      } catch (error) {
+        console.error('Error syncing alert settings:', error);
+      }
+    }
   };
 
   // Get expiration color based on days until expiration
@@ -342,44 +392,63 @@ export default function Index() {
     return '#5856D6'; // Purple - more than 3 days
   };
 
-  const renderProduct = ({ item }: { item: SavedProduct }) => (
-    <View style={styles.productCard}>
-      <TouchableOpacity 
-        onPress={() => openProductOptions(item)}
-        activeOpacity={0.7}
-      >
-        <View style={styles.productRow}>
-          {item.image_url && (
-            <Image source={{ uri: item.image_url }} style={styles.productImage} />
-          )}
-          <View style={styles.productInfo}>
-            <Text style={styles.productName}>
-              {item.product_name || 'Unknown Product'}
-            </Text>
-            {item.brands && (
-              <Text style={styles.brandName}>{item.brands}</Text>
+  const renderProduct = ({ item }: { item: SavedProduct }) => {
+    // Determine display name with fallback
+    const displayName = item.product_name?.trim() 
+      ? item.product_name 
+      : item.brands?.trim() 
+        ? `${item.brands}` 
+        : 'Unknown Product';
+    
+    // Show warning if product name is missing
+    const isMissingInfo = !item.product_name?.trim();
+
+    return (
+      <View style={styles.productCard}>
+        <TouchableOpacity 
+          onPress={() => openProductOptions(item)}
+          activeOpacity={0.7}
+        >
+          <View style={styles.productRow}>
+            {item.image_url ? (
+              <Image source={{ uri: item.image_url }} style={styles.productImage} />
+            ) : (
+              <View style={[styles.productImage, styles.placeholderImage]}>
+                <Text style={styles.placeholderText}>📦</Text>
+              </View>
             )}
-            {item.calories && (
-              <Text style={styles.calorieText}>🔥 {parseFloat(item.calories).toFixed(2)} kcal/100g</Text>
-            )}
-            {item.expiration_date && (
-              <>
-                <Text style={[styles.expirationText, { color: getExpirationColor(item.expiration_date) }]}>
-                  📅 Expires: {new Date(item.expiration_date).toLocaleDateString()}
-                </Text>
-                <Text style={styles.alertDaysText}>
-                  🔔 Alert: {item.alertDaysBefore ?? 1} day{(item.alertDaysBefore ?? 1) !== 1 ? 's' : ''} before
-                </Text>
-              </>
-            )}
-            <Text style={styles.scanDate}>
-              Scanned: {new Date(item.scannedAt).toLocaleDateString()}
-            </Text>
+            <View style={styles.productInfo}>
+              <Text style={styles.productName}>
+                {displayName}
+              </Text>
+              {isMissingInfo && (
+                <Text style={styles.warningText}>⚠️ Incomplete product data</Text>
+              )}
+              {item.brands && item.product_name?.trim() && (
+                <Text style={styles.brandName}>{item.brands}</Text>
+              )}
+              {item.calories && (
+                <Text style={styles.calorieText}>🔥 {parseFloat(item.calories).toFixed(2)} kcal/100g</Text>
+              )}
+              {item.expiration_date && (
+                <>
+                  <Text style={[styles.expirationText, { color: getExpirationColor(item.expiration_date) }]}>
+                    📅 Expires: {new Date(item.expiration_date).toLocaleDateString()}
+                  </Text>
+                  <Text style={styles.alertDaysText}>
+                    🔔 Alert: {item.alertDaysBefore ?? 1} day{(item.alertDaysBefore ?? 1) !== 1 ? 's' : ''} before
+                  </Text>
+                </>
+              )}
+              <Text style={styles.scanDate}>
+                Scanned: {new Date(item.scannedAt).toLocaleDateString()}
+              </Text>
+            </View>
           </View>
-        </View>
-      </TouchableOpacity>
-    </View>
-  );
+        </TouchableOpacity>
+      </View>
+    );
+  };
 
   if (!fontsLoaded || loading) {
     return (
@@ -709,6 +778,14 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginRight: 12,
   },
+  placeholderImage: {
+    backgroundColor: '#f0f0f0',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  placeholderText: {
+    fontSize: 32,
+  },
   productInfo: {
     flex: 1,
     justifyContent: 'center',
@@ -725,6 +802,13 @@ const styles = StyleSheet.create({
     color: '#666',
     marginBottom: 4,
     fontFamily: 'PassionOne_400Regular',
+  },
+  warningText: {
+    fontSize: 12,
+    color: '#FF9500',
+    marginBottom: 4,
+    fontFamily: 'PassionOne_400Regular',
+    fontStyle: 'italic',
   },
   calorieText: {
     fontSize: 13,
