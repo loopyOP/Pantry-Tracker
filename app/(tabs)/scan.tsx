@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef, useContext } from "react";
-import { Text, View, StyleSheet, Button, ActivityIndicator, Image, ScrollView, Alert, Pressable, TextInput, Platform } from "react-native";
+import { Text, View, StyleSheet, Button, ActivityIndicator, Image, ScrollView, Pressable, TextInput, Platform, Modal } from "react-native";
 import { CameraView, Camera } from "expo-camera";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useFonts, PassionOne_400Regular } from '@expo-google-fonts/passion-one';
 import { AuthContext } from "@/contexts/AuthContext";
+import { useSnackbar } from "@/contexts/SnackbarContext";
 import productService from "@/services/productService";
 
 interface ProductInfo {
@@ -27,6 +28,7 @@ export default function Scan() {
   });
 
   const { token } = useContext(AuthContext);
+  const { showSnackbar } = useSnackbar();
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [scanned, setScanned] = useState(false);
   const [barcodeData, setBarcodeData] = useState<any>(null);
@@ -34,8 +36,31 @@ export default function Scan() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const scanTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [manualExpirationDate, setManualExpirationDate] = useState<Date | undefined>(undefined);
+  const [manualExpirationDate, setManualExpirationDate] = useState<Date | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [quantity, setQuantity] = useState<number>(1);
+
+  // Helper to convert local date to midnight UTC (preserves the date but stores as UTC)
+  const toMidnightUTC = (date: Date): string => {
+    // Create UTC date with same year/month/day as local date
+    const utcDate = new Date(Date.UTC(
+      date.getFullYear(),
+      date.getMonth(),
+      date.getDate(),
+      0, 0, 0, 0
+    ));
+    return utcDate.toISOString();
+  };
+
+  // Helper to format UTC date string without timezone conversion
+  const formatUTCDate = (dateString: string): string => {
+    const date = new Date(dateString);
+    // Extract UTC components to avoid timezone shift
+    const month = date.getUTCMonth() + 1;
+    const day = date.getUTCDate();
+    const year = date.getUTCFullYear();
+    return `${month}/${day}/${year}`;
+  };
 
   useEffect(() => {
     const getCameraPermissions = async () => {
@@ -56,7 +81,7 @@ export default function Scan() {
       
       // Use manual expiration date if set, otherwise use API data
       const finalExpirationDate = manualExpirationDate 
-        ? manualExpirationDate.toISOString() 
+        ? toMidnightUTC(manualExpirationDate)
         : productInfo.expiration_date;
       
       // Add scan timestamp and barcode to product
@@ -64,7 +89,8 @@ export default function Scan() {
         ...productInfo,
         expiration_date: finalExpirationDate,
         barcode: barcodeData.data,
-        scannedAt: new Date().toISOString(),
+        quantity,
+        scannedAt: toMidnightUTC(new Date()),
       };
       
       // Check if product already exists, update it instead of adding duplicate
@@ -81,19 +107,19 @@ export default function Scan() {
       if (token) {
         try {
           await productService.upsertProduct(productWithMetadata);
-          Alert.alert('Success', 'Product saved to your pantry and synced to cloud! ☁️');
+          showSnackbar('Product saved and synced to cloud ☁️', { type: 'success' });
         } catch (serverError) {
           console.error('Error syncing to server:', serverError);
-          Alert.alert('Success', 'Product saved locally. Will sync when connection is available.');
+          showSnackbar('Saved locally. Will sync when online.', { type: 'info' });
         }
       } else {
-        Alert.alert('Success', 'Product saved to your pantry!');
+        showSnackbar('Product saved to your pantry', { type: 'success' });
       }
       
       resetScanner();
     } catch (error) {
       console.error('Error saving product:', error);
-      Alert.alert('Error', 'Failed to save product to storage');
+      showSnackbar('Failed to save product to storage', { type: 'error' });
     }
   };
 
@@ -143,6 +169,7 @@ export default function Scan() {
     // Set scanned state immediately to prevent further scans
     setScanned(true);
     setBarcodeData({ type, data, bounds });
+    setQuantity(1);
     
     // Fetch product information
     try {
@@ -170,8 +197,9 @@ export default function Scan() {
     setProductInfo(null);
     setError(null);
     setLoading(false);
-    setManualExpirationDate(undefined);
+    setManualExpirationDate(null);
     setShowDatePicker(false);
+    setQuantity(1);
   };
 
   // Handle date picker change
@@ -180,6 +208,10 @@ export default function Scan() {
     if (selectedDate) {
       setManualExpirationDate(selectedDate);
     }
+  };
+  
+  const openExpirationPicker = () => {
+    setShowDatePicker(true);
   };
 
   // Cleanup timeout on component unmount
@@ -265,6 +297,12 @@ export default function Scan() {
                   <Text style={styles.errorTitle}>❌ {error}</Text>
                   <Text style={styles.resultType}>Barcode: {barcodeData?.data}</Text>
                   <Text style={styles.resultData}>Type: {barcodeData?.type}</Text>
+                  <Pressable 
+                    style={styles.cancelButton}
+                    onPress={resetScanner}
+                  >
+                    <Text style={styles.cancelButtonText}>Scan Again</Text>
+                  </Pressable>
                 </View>
               ) : productInfo ? (
                 <View style={styles.productContainer}>
@@ -280,71 +318,112 @@ export default function Scan() {
                     />
                   )}
                   
-                  {productInfo.brands && (
-                    <Text style={styles.productBrand}>Brand: {productInfo.brands}</Text>
-                  )}
-                  
-                  {productInfo.quantity && (
-                    <Text style={styles.productDetail}>Quantity: {productInfo.quantity}</Text>
-                  )}
-                  
-                  {productInfo.calories && (
-                    <Text style={styles.calorieInfo}>
-                      🔥 Calories: {parseFloat(productInfo.calories).toFixed(2)} kcal per 100g
-                    </Text>
-                  )}
-                  
-                  {(productInfo.expiration_date || manualExpirationDate) && (
-                    <Text style={styles.expirationInfo}>
-                      📅 Expires: {manualExpirationDate 
-                        ? manualExpirationDate.toLocaleDateString()
-                        : new Date(productInfo.expiration_date!).toLocaleDateString()}
-                    </Text>
-                  )}
-                  
-                  {!productInfo.expiration_date && !manualExpirationDate && (
-                    <View style={styles.addExpirationContainer}>
-                      <Text style={styles.noExpirationText}>No expiration date found</Text>
-                      <Pressable 
-                        style={styles.addExpirationButton}
-                        onPress={() => setShowDatePicker(true)}
-                      >
-                        <Text style={styles.addExpirationButtonText}>+ Add Expiration Date</Text>
-                      </Pressable>
+                  {/* Details Section */}
+                  <View style={styles.section}>
+                    <Text style={styles.sectionHeader}>Details</Text>
+                    <View style={styles.chipsRow}>
+                      {productInfo.brands ? (
+                        <View style={styles.chip}><Text style={styles.chipText}>Brand: {productInfo.brands}</Text></View>
+                      ) : null}
+                      {productInfo.categories ? (
+                        <View style={styles.chip}><Text style={styles.chipText}>{productInfo.categories.split(',').slice(0, 2).join(', ')}</Text></View>
+                      ) : null}
                     </View>
-                  )}
-                  
-                  {(productInfo.expiration_date || manualExpirationDate) && (
-                    <Pressable 
-                      style={styles.changeExpirationButton}
-                      onPress={() => setShowDatePicker(true)}
-                    >
-                      <Text style={styles.changeExpirationButtonText}>Change Date</Text>
-                    </Pressable>
-                  )}
-                  
-                  {showDatePicker && (
-                    <DateTimePicker
-                      value={manualExpirationDate || new Date()}
-                      mode="date"
-                      display="default"
-                      onChange={onDateChange}
-                      minimumDate={new Date()}
-                    />
-                  )}
-                  
-                  {productInfo.categories && (
-                    <Text style={styles.productDetail}>
-                      Categories: {productInfo.categories.split(',').slice(0, 3).join(', ')}
-                    </Text>
-                  )}
-                  
-                  {productInfo.nutrition_grade && (
-                    <Text style={styles.nutritionGrade}>
-                      Nutrition Grade: {productInfo.nutrition_grade.toUpperCase()}
-                    </Text>
-                  )}
-                  
+                    <View style={styles.qtyRowScan}>
+                      <Text style={styles.qtyScanLabel}>Quantity</Text>
+                      <View style={styles.qtyScanControl}>
+                        <Pressable style={[styles.qtyScanButton, styles.qtyScanMinus]} onPress={() => setQuantity(q => Math.max(0, q - 1))}>
+                          <Text style={styles.qtyScanButtonText}>−</Text>
+                        </Pressable>
+                        <Text style={styles.qtyScanValue}>{quantity}</Text>
+                        <Pressable style={[styles.qtyScanButton, styles.qtyScanPlus]} onPress={() => setQuantity(q => q + 1)}>
+                          <Text style={styles.qtyScanButtonText}>＋</Text>
+                        </Pressable>
+                      </View>
+                    </View>
+                  </View>
+
+                  {/* Nutrition Section */}
+                  <View style={styles.section}>
+                    <Text style={styles.sectionHeader}>Nutrition</Text>
+                    <View style={styles.chipsRow}>
+                      {productInfo.calories ? (
+                        <View style={[styles.chip, styles.chipCal]}><Text style={styles.chipText}>🔥 {parseFloat(productInfo.calories).toFixed(2)} kcal/100g</Text></View>
+                      ) : null}
+                      {productInfo.nutrition_grade ? (
+                        <View style={[styles.chip, styles.chipNut]}><Text style={styles.chipText}>Grade: {productInfo.nutrition_grade.toUpperCase()}</Text></View>
+                      ) : null}
+                    </View>
+                  </View>
+
+                  {/* Expiration Section */}
+                  <View style={styles.section}>
+                    <Text style={styles.sectionHeader}>Expiration</Text>
+                    {(manualExpirationDate || productInfo.expiration_date) ? (
+                      <View style={styles.expRow}>
+                        <Text style={styles.expirationInfo}>
+                          📅 Expires: {manualExpirationDate 
+                            ? manualExpirationDate.toLocaleDateString()
+                            : formatUTCDate(productInfo.expiration_date!)}
+                        </Text>
+                        <Pressable style={styles.primaryOutlineButton} onPress={openExpirationPicker}>
+                          <Text style={styles.primaryOutlineButtonText}>Change Date</Text>
+                        </Pressable>
+                      </View>
+                    ) : (
+                      <View style={styles.expRow}>
+                        <Text style={styles.noExpirationText}>No expiration date set</Text>
+                        <Pressable style={styles.primaryButton} onPress={openExpirationPicker}>
+                          <Text style={styles.primaryButtonText}>Set Expiration Date</Text>
+                        </Pressable>
+                      </View>
+                    )}
+
+                    {showDatePicker && (
+                      Platform.OS === 'ios' ? (
+                        <Modal
+                          visible={showDatePicker}
+                          transparent
+                          animationType="slide"
+                          onRequestClose={() => setShowDatePicker(false)}
+                        >
+                          <Pressable style={styles.modalOverlay} onPress={() => setShowDatePicker(false)}>
+                            <Pressable onPress={() => {}}>
+                              <View style={styles.iosPickerSheet}>
+                                <Text style={styles.iosPickerTitle}>Select Expiration Date</Text>
+                                <DateTimePicker
+                                  value={manualExpirationDate || new Date()}
+                                  mode="date"
+                                  display="spinner"
+                                  onChange={onDateChange}
+                                  minimumDate={new Date()}
+                                  textColor="#000"
+                                  themeVariant="light"
+                                />
+                                <View style={styles.iosPickerActions}>
+                                  <Pressable style={[styles.iosPickerButton, styles.iosPickerCancel]} onPress={() => setShowDatePicker(false)}>
+                                    <Text style={styles.iosPickerButtonText}>Cancel</Text>
+                                  </Pressable>
+                                  <Pressable style={[styles.iosPickerButton, styles.iosPickerDone]} onPress={() => setShowDatePicker(false)}>
+                                    <Text style={styles.iosPickerButtonText}>Done</Text>
+                                  </Pressable>
+                                </View>
+                              </View>
+                            </Pressable>
+                          </Pressable>
+                        </Modal>
+                      ) : (
+                        <DateTimePicker
+                          value={manualExpirationDate || new Date()}
+                          mode="date"
+                          display="default"
+                          onChange={(e, d) => { setShowDatePicker(false); if (d) setManualExpirationDate(d); }}
+                          minimumDate={new Date()}
+                        />
+                      )
+                    )}
+                  </View>
+
                   <Text style={styles.barcodeInfo}>
                     Barcode: {barcodeData?.data} ({barcodeData?.type})
                   </Text>
@@ -460,6 +539,96 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     fontFamily: 'PassionOne_400Regular',
   },
+  section: {
+    width: '100%',
+    marginTop: 8,
+  },
+  sectionHeader: {
+    fontSize: 14,
+    color: '#777',
+    marginBottom: 6,
+    fontFamily: 'PassionOne_400Regular',
+  },
+  chipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  chip: {
+    backgroundColor: '#F2F2F7',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 14,
+  },
+  chipText: {
+    color: '#333',
+    fontSize: 13,
+    fontFamily: 'PassionOne_400Regular',
+  },
+  chipCal: { backgroundColor: '#FFF5F2' },
+  chipNut: { backgroundColor: '#F0F9F0' },
+  expRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  primaryButton: {
+    backgroundColor: '#03A903',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+  },
+  primaryButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontFamily: 'PassionOne_400Regular',
+  },
+  primaryOutlineButton: {
+    borderWidth: 1,
+    borderColor: '#03A903',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+  },
+  primaryOutlineButtonText: {
+    color: '#03A903',
+    fontSize: 14,
+    fontFamily: 'PassionOne_400Regular',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  iosPickerSheet: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    padding: 16,
+    marginBottom: 24,
+  },
+  iosPickerTitle: {
+    fontSize: 16,
+    color: '#333',
+    textAlign: 'center',
+    marginBottom: 8,
+    fontFamily: 'PassionOne_400Regular',
+  },
+  iosPickerActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 10,
+  },
+  iosPickerButton: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  iosPickerCancel: { backgroundColor: '#999' },
+  iosPickerDone: { backgroundColor: '#03A903' },
+  iosPickerButtonText: { color: '#fff', fontSize: 16, fontFamily: 'PassionOne_400Regular' },
   errorContainer: {
     alignItems: 'center',
     paddingVertical: 20,
@@ -609,6 +778,34 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     fontFamily: 'PassionOne_400Regular',
   },
+  qtyRowScan: {
+    marginTop: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  qtyScanLabel: {
+    fontSize: 14,
+    color: '#666',
+    fontFamily: 'PassionOne_400Regular',
+  },
+  qtyScanControl: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  qtyScanButton: {
+    width: 36,
+    height: 32,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  qtyScanMinus: { backgroundColor: '#FF3B30' },
+  qtyScanPlus: { backgroundColor: '#03A903' },
+  qtyScanButtonText: { color: '#fff', fontSize: 18, fontWeight: '700' },
+  qtyScanValue: { fontSize: 16, fontWeight: '700', color: '#333', minWidth: 24, textAlign: 'center' },
   actionButtons: {
     flexDirection: 'row',
     justifyContent: 'space-between',
