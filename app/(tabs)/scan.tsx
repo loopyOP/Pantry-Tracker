@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useContext } from "react";
 import { Text, View, StyleSheet, Button, ActivityIndicator, Image, ScrollView, Pressable, TextInput, Platform, Modal } from "react-native";
+import * as Clipboard from 'expo-clipboard';
 import { CameraView, Camera } from "expo-camera";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -39,6 +40,9 @@ export default function Scan() {
   const [manualExpirationDate, setManualExpirationDate] = useState<Date | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [quantity, setQuantity] = useState<number>(1);
+  const [manualModalVisible, setManualModalVisible] = useState(false);
+  const [manualBarcodeText, setManualBarcodeText] = useState('');
+  const [recentManualBarcodes, setRecentManualBarcodes] = useState<string[]>([]);
 
   // Helper to convert local date to midnight UTC (preserves the date but stores as UTC)
   const toMidnightUTC = (date: Date): string => {
@@ -69,6 +73,13 @@ export default function Scan() {
     };
 
     getCameraPermissions();
+    // Load recent manual barcodes
+    (async () => {
+      try {
+        const stored = await AsyncStorage.getItem('recentManualBarcodes');
+        if (stored) setRecentManualBarcodes(JSON.parse(stored));
+      } catch {}
+    })();
   }, []);
 
   // Function to save product to local storage and server
@@ -200,6 +211,63 @@ export default function Scan() {
     setManualExpirationDate(null);
     setShowDatePicker(false);
     setQuantity(1);
+    setManualBarcodeText('');
+    setManualModalVisible(false);
+  };
+
+  const openManualBarcodeModal = () => {
+    setManualBarcodeText('');
+    setManualModalVisible(true);
+  };
+
+  const performManualLookup = async () => {
+    const entered = manualBarcodeText.trim();
+    if (!entered) {
+      showSnackbar('Enter a barcode first', { type: 'error' });
+      return;
+    }
+    // Basic validation: digits only for common EAN/UPC, but allow alphanumerics
+    if (entered.length < 6) {
+      showSnackbar('Barcode too short', { type: 'error' });
+      return;
+    }
+    setManualModalVisible(false);
+    setScanned(true);
+    setBarcodeData({ type: 'manual', data: entered });
+    setQuantity(1);
+    try {
+      const product = await fetchProductInfo(entered);
+      setProductInfo(product);
+      if (!product) {
+        setError('Product not found in database');
+      }
+      // Persist recent barcodes list (store even if not found to assist re-entry)
+      setRecentManualBarcodes(prev => {
+        const next = [entered, ...prev.filter(b => b !== entered)].slice(0, 5);
+        AsyncStorage.setItem('recentManualBarcodes', JSON.stringify(next)).catch(()=>{});
+        return next;
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Lookup failed');
+      setRecentManualBarcodes(prev => {
+        const next = [entered, ...prev.filter(b => b !== entered)].slice(0, 5);
+        AsyncStorage.setItem('recentManualBarcodes', JSON.stringify(next)).catch(()=>{});
+        return next;
+      });
+    }
+  };
+
+  const pasteFromClipboard = async () => {
+    try {
+      const content = await Clipboard.getStringAsync();
+      if (!content) {
+        showSnackbar('Clipboard is empty', { type: 'info' });
+        return;
+      }
+      setManualBarcodeText(content.trim());
+    } catch (e) {
+      showSnackbar('Failed to read clipboard', { type: 'error' });
+    }
   };
 
   // Handle date picker change
@@ -279,6 +347,9 @@ export default function Scan() {
           <Text style={styles.instructionText}>
             Point camera at barcode
           </Text>
+          <Pressable style={styles.manualButton} onPress={openManualBarcodeModal}>
+            <Text style={styles.manualButtonText}>⌨️ Enter Barcode Manually</Text>
+          </Pressable>
         </View>
       )}
 
@@ -459,6 +530,59 @@ export default function Scan() {
           </ScrollView>
         </View>
       )}
+      {/* Manual Barcode Modal */}
+      <Modal
+        visible={manualModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setManualModalVisible(false)}
+      >
+        <Pressable style={styles.manualModalOverlay} onPress={() => setManualModalVisible(false)}>
+          <Pressable style={styles.manualModalCard} onPress={() => {}}>
+            <Text style={styles.manualModalTitle}>Enter Barcode</Text>
+            <Text style={styles.manualHint}>Common lengths: UPC-A 12 • EAN-13 13 • EAN-8 8</Text>
+            <TextInput
+              style={styles.manualInput}
+              value={manualBarcodeText}
+              onChangeText={setManualBarcodeText}
+              placeholder="e.g. 0123456789123"
+              placeholderTextColor="#999"
+              autoCapitalize="characters"
+              autoCorrect={false}
+            />
+            <View style={styles.manualUtilityRow}>
+              <Pressable style={[styles.utilityBtn, styles.utilityPaste]} onPress={pasteFromClipboard}>
+                <Text style={styles.utilityBtnText}>Paste</Text>
+              </Pressable>
+              {manualBarcodeText.length > 0 && (
+                <Pressable style={[styles.utilityBtn, styles.utilityClear]} onPress={() => setManualBarcodeText('')}>
+                  <Text style={styles.utilityBtnText}>Clear</Text>
+                </Pressable>
+              )}
+            </View>
+            {recentManualBarcodes.length > 0 && (
+              <View style={styles.recentContainer}>
+                <Text style={styles.recentTitle}>Recent</Text>
+                <View style={styles.recentRow}>
+                  {recentManualBarcodes.map(code => (
+                    <Pressable key={code} style={styles.recentChip} onPress={() => setManualBarcodeText(code)}>
+                      <Text style={styles.recentChipText}>{code}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
+            )}
+            <View style={styles.manualActions}>
+              <Pressable style={[styles.manualActionBtn, styles.manualCancelBtn]} onPress={() => setManualModalVisible(false)}>
+                <Text style={styles.manualActionText}>Cancel</Text>
+              </Pressable>
+              <Pressable style={[styles.manualActionBtn, styles.manualLookupBtn]} onPress={performManualLookup}>
+                <Text style={styles.manualActionText}>Lookup</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -504,6 +628,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 8,
     borderRadius: 20,
+    fontFamily: 'PassionOne_400Regular',
+  },
+  manualButton: {
+    position: 'absolute',
+    bottom: 80,
+    backgroundColor: '#03A903',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 28,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+    elevation: 4,
+  },
+  manualButtonText: {
+    color: '#fff',
+    fontSize: 14,
     fontFamily: 'PassionOne_400Regular',
   },
   resultContainer: {
@@ -846,6 +988,109 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '400',
+    fontFamily: 'PassionOne_400Regular',
+  },
+  manualModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  manualModalCard: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 24,
+    width: '90%',
+    maxWidth: 420,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  manualModalTitle: {
+    fontSize: 20,
+    fontWeight: '400',
+    color: '#333',
+    marginBottom: 16,
+    textAlign: 'center',
+    fontFamily: 'PassionOne_400Regular',
+  },
+  manualInput: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 12,
+    padding: 14,
+    fontSize: 16,
+    fontFamily: 'PassionOne_400Regular',
+    color: '#333',
+    backgroundColor: '#FAFAFA',
+    marginBottom: 18,
+  },
+  manualActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  manualActionBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  manualCancelBtn: { backgroundColor: '#999' },
+  manualLookupBtn: { backgroundColor: '#03A903' },
+  manualActionText: {
+    color: '#fff',
+    fontSize: 16,
+    fontFamily: 'PassionOne_400Regular',
+  },
+  manualHint: {
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 10,
+    fontFamily: 'PassionOne_400Regular',
+  },
+  manualUtilityRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 12,
+  },
+  utilityBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  utilityPaste: { backgroundColor: '#007AFF' },
+  utilityClear: { backgroundColor: '#FF9500' },
+  utilityBtnText: { color: '#fff', fontSize: 14, fontFamily: 'PassionOne_400Regular' },
+  recentContainer: {
+    marginBottom: 16,
+  },
+  recentTitle: {
+    fontSize: 12,
+    color: '#999',
+    marginBottom: 6,
+    fontFamily: 'PassionOne_400Regular',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  recentRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  recentChip: {
+    backgroundColor: '#F2F2F7',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 14,
+  },
+  recentChipText: {
+    color: '#333',
+    fontSize: 12,
     fontFamily: 'PassionOne_400Regular',
   },
 });

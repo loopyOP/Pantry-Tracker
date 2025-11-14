@@ -113,7 +113,7 @@ export default function profile() {
                   <Text style={styles.syncButtonText}>Syncing...</Text>
                 </View>
               ) : (
-                <Text style={styles.syncButtonText}>🔄 Sync Data</Text>
+                <Text style={styles.syncButtonText}>🔄 Manually Sync Data</Text>
               )}
             </Pressable>
 

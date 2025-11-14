@@ -1,4 +1,4 @@
-import { Text, View, StyleSheet, FlatList, Image, TouchableOpacity, Alert, Pressable, Modal, TextInput, TextInput as RNTextInput, Platform } from "react-native";
+import { Text, View, StyleSheet, FlatList, Image, TouchableOpacity, Alert, Pressable, Modal, TextInput, TextInput as RNTextInput, Platform, ScrollView } from "react-native";
 import { useState, useEffect, useContext, useRef } from "react";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
@@ -55,6 +55,7 @@ export default function Index() {
   const [quantityModalVisible, setQuantityModalVisible] = useState(false);
   const [tempQuantity, setTempQuantity] = useState<number>(1);
   const [tempQuantityText, setTempQuantityText] = useState<string>('1');
+  const [infoModalVisible, setInfoModalVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [sortBy, setSortBy] = useState<'name' | 'expiration'>('expiration');
   const [newExpirationDate, setNewExpirationDate] = useState<Date>(new Date());
@@ -596,6 +597,12 @@ export default function Index() {
     setAlertModalVisible(true);
   };
 
+  const openInfoModal = () => {
+    if (!selectedProduct) return;
+    setOptionsModalVisible(false);
+    setInfoModalVisible(true);
+  };
+
   const openQuantityModal = () => {
     if (!selectedProduct) return;
     setOptionsModalVisible(false);
@@ -791,9 +798,7 @@ export default function Index() {
               {item.brands && item.product_name?.trim() && (
                 <Text style={styles.brandName}>{item.brands}</Text>
               )}
-              {item.calories && (
-                <Text style={styles.calorieText}>🔥 {parseFloat(item.calories).toFixed(2)} kcal/100g</Text>
-              )}
+              {/* Calorie display removed as requested */}
               {item.expiration_date && isValidDateString(item.expiration_date) && (
                 <>
                   <Text style={[styles.expirationText, { color: getExpirationColor(item.expiration_date) }]}>
@@ -976,6 +981,13 @@ export default function Index() {
               onPress={openQuantityModal}
             >
               <Text style={styles.optionButtonText}>🔢 Edit Quantity</Text>
+            </Pressable>
+
+            <Pressable 
+              style={styles.optionButton}
+              onPress={openInfoModal}
+            >
+              <Text style={styles.optionButtonText}>ℹ️ Product Info</Text>
             </Pressable>
 
             <Pressable 
@@ -1199,6 +1211,61 @@ export default function Index() {
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
+
+      {/* Product Info Modal */}
+      <Modal
+        visible={infoModalVisible}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setInfoModalVisible(false)}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setInfoModalVisible(false)}
+        >
+          <TouchableOpacity 
+            activeOpacity={1}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>
+                Product Info{selectedProduct?.product_name ? ` — ${selectedProduct.product_name}` : ''}
+              </Text>
+              <ScrollView style={{ maxHeight: 420 }}>
+                {selectedProduct?.image_url ? (
+                  <Image source={{ uri: selectedProduct.image_url }} style={styles.infoImage} />
+                ) : null}
+                <View style={styles.infoRow}><Text style={styles.infoLabel}>Barcode:</Text><Text style={styles.infoValue}>{selectedProduct?.barcode || '—'}</Text></View>
+                <View style={styles.infoRow}><Text style={styles.infoLabel}>Name:</Text><Text style={styles.infoValue}>{selectedProduct?.product_name || '—'}</Text></View>
+                <View style={styles.infoRow}><Text style={styles.infoLabel}>Brand(s):</Text><Text style={styles.infoValue}>{selectedProduct?.brands || '—'}</Text></View>
+                <View style={styles.infoRow}><Text style={styles.infoLabel}>Quantity:</Text><Text style={styles.infoValue}>{(() => {
+                  const q: any = selectedProduct?.quantity as any;
+                  if (typeof q === 'number') return String(Math.max(0, q));
+                  const parsed = parseInt(String(q ?? ''), 10);
+                  return isNaN(parsed) ? '—' : String(Math.max(0, parsed));
+                })()}</Text></View>
+                <View style={styles.infoRow}><Text style={styles.infoLabel}>Nutrition Grade:</Text><Text style={styles.infoValue}>{selectedProduct?.nutrition_grade || '—'}</Text></View>
+                <View style={styles.infoRow}><Text style={styles.infoLabel}>Calories:</Text><Text style={styles.infoValue}>{selectedProduct?.calories ? String(selectedProduct.calories) : '—'}</Text></View>
+                <View style={styles.infoRow}><Text style={styles.infoLabel}>Categories:</Text><Text style={styles.infoValue}>{(selectedProduct as any)?.categories || '—'}</Text></View>
+                <View style={styles.infoRow}><Text style={styles.infoLabel}>Ingredients:</Text><Text style={styles.infoValue}>{(selectedProduct as any)?.ingredients_text || '—'}</Text></View>
+                <View style={styles.infoRow}><Text style={styles.infoLabel}>Expires:</Text><Text style={styles.infoValue}>{selectedProduct?.expiration_date ? formatUTCDate(selectedProduct.expiration_date) : '—'}</Text></View>
+                <View style={styles.infoRow}><Text style={styles.infoLabel}>Alert Days Before:</Text><Text style={styles.infoValue}>{selectedProduct?.alertDaysBefore ?? (selectedProduct?.expiration_date ? 1 : '—')}</Text></View>
+                <View style={styles.infoRow}><Text style={styles.infoLabel}>Scanned:</Text><Text style={styles.infoValue}>{selectedProduct?.scannedAt ? formatUTCDate(selectedProduct.scannedAt) : '—'}</Text></View>
+                <View style={styles.infoRow}><Text style={styles.infoLabel}>Image URL:</Text><Text style={styles.infoValue}>{selectedProduct?.image_url || '—'}</Text></View>
+              </ScrollView>
+              <View style={styles.modalButtons}>
+                <Pressable 
+                  style={[styles.modalButton, styles.cancelButton]}
+                  onPress={() => setInfoModalVisible(false)}
+                >
+                  <Text style={styles.modalButtonText}>Close</Text>
+                </Pressable>
+              </View>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
@@ -1392,13 +1459,13 @@ const styles = StyleSheet.create({
     fontFamily: 'PassionOne_400Regular',
   },
   expirationText: {
-    fontSize: 13,
+    fontSize: 15,
     marginBottom: 2,
     fontFamily: 'PassionOne_400Regular',
     fontWeight: '600',
   },
   alertDaysText: {
-    fontSize: 11,
+    fontSize: 13,
     color: '#03A903',
     marginBottom: 2,
     fontFamily: 'PassionOne_400Regular',
@@ -1559,5 +1626,33 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     fontFamily: 'PassionOne_400Regular',
     backgroundColor: '#fff',
+  },
+  infoImage: {
+    width: '100%',
+    height: 160,
+    borderRadius: 8,
+    marginBottom: 12,
+    backgroundColor: '#f0f0f0',
+  },
+  infoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 12,
+    paddingVertical: 6,
+  },
+  infoLabel: {
+    color: '#666',
+    fontSize: 14,
+    fontFamily: 'PassionOne_400Regular',
+    minWidth: 120,
+  },
+  infoValue: {
+    color: '#333',
+    fontSize: 14,
+    fontFamily: 'PassionOne_400Regular',
+    flex: 1,
+    textAlign: 'right',
+    flexWrap: 'wrap',
   },
 });
