@@ -136,33 +136,41 @@ Products are stored with the following fields:
 - Verify backend database has products
 - Check user_id matches logged-in user
 
-### Duplicate Products
-- The system prevents duplicates by barcode
-- If you see duplicates, they have different barcodes
-- Server data takes priority during sync
+### Duplicate Products & Multiple Expiration Lots
+Previously, the system prevented duplicates strictly by barcode. After migration `20251117-alter_products_unique_constraint`, you can have multiple entries for the same barcode with different expiration dates (separate lots/batches).
+
+Current behavior:
+- Scanning the same barcode with a different expiration date creates a new local entry.
+- Server stores each (user_id, barcode, expiration_date) combination separately.
+- The existing merge logic still collapses server rows by barcode; this will be updated.
+
+Planned enhancement:
+- Merge routine will use a composite key (barcode + expiration_date) to preserve distinct lots.
 
 ## Database Schema
 
 ```sql
+-- Updated uniqueness: multiple lots of same barcode with distinct expiration dates.
 CREATE TABLE products (
-  id SERIAL PRIMARY KEY,
-  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  barcode VARCHAR(255) NOT NULL,
-  product_name VARCHAR(255),
-  brands VARCHAR(255),
-  image_url TEXT,
-  categories TEXT,
-  ingredients_text TEXT,
-  nutrition_grade VARCHAR(10),
-  quantity VARCHAR(100),
-  calories DECIMAL(10, 2),
-  expiration_date TIMESTAMP,
-  alert_days_before INTEGER DEFAULT 1,
-  scanned_at TIMESTAMP NOT NULL DEFAULT NOW(),
-  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
-  UNIQUE(user_id, barcode)
+   id SERIAL PRIMARY KEY,
+   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+   barcode VARCHAR(255) NOT NULL,
+   product_name VARCHAR(255),
+   brands VARCHAR(255),
+   image_url TEXT,
+   categories TEXT,
+   ingredients_text TEXT,
+   nutrition_grade VARCHAR(10),
+   quantity VARCHAR(100),
+   calories DECIMAL(10, 2),
+   expiration_date TIMESTAMP,
+   alert_days_before INTEGER DEFAULT 1,
+   scanned_at TIMESTAMP NOT NULL DEFAULT NOW(),
+   created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+   updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
+-- Unique index applied via migration:
+-- CREATE UNIQUE INDEX products_user_id_barcode_expiration_uidx ON products(user_id, barcode, expiration_date);
 ```
 
 ## Features
@@ -170,7 +178,7 @@ CREATE TABLE products (
 ✅ Automatic cloud sync when logged in
 ✅ Manual sync button on profile screen
 ✅ Offline support (saves locally first)
-✅ Duplicate prevention (by barcode)
+✅ Supports multiple expiration lots per barcode
 ✅ Batch sync optimization
 ✅ Real-time sync status messages
 ✅ Cross-device compatibility

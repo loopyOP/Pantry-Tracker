@@ -932,7 +932,7 @@ export default function Index() {
       <FlatList
         data={filteredProducts}
         renderItem={renderProduct}
-        keyExtractor={(item) => item.barcode}
+        keyExtractor={(item) => `${item.barcode}::${item.expiration_date || 'none'}::${item.id || ''}`}
         contentContainerStyle={styles.listContainer}
       />
       <Text style={styles.hintText}>

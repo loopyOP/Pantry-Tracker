@@ -104,8 +104,13 @@ export default function Scan() {
         scannedAt: toMidnightUTC(new Date()),
       };
       
-      // Check if product already exists, update it instead of adding duplicate
-      const existingIndex = products.findIndex((p: any) => p.barcode === barcodeData.data);
+      // Check if an entry with SAME barcode AND SAME expiration_date exists.
+      // If expiration differs, we create a new entry (different lot/batch).
+      const existingIndex = products.findIndex((p: any) => {
+        const pExp = p.expiration_date || null;
+        const newExp = finalExpirationDate || null;
+        return p.barcode === barcodeData.data && pExp === newExp;
+      });
       if (existingIndex !== -1) {
         products[existingIndex] = productWithMetadata;
       } else {
