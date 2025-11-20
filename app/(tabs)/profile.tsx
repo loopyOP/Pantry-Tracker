@@ -158,7 +158,7 @@ export default function profile() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#ffffff',
   },
   content: {
     flex: 1,
@@ -176,7 +176,7 @@ const styles = StyleSheet.create({
   titleText: {
     fontSize: 28,
     fontWeight: '400',
-    color: '#333',
+    color: '#00510f',
     marginBottom: 12,
     textAlign: 'center',
     fontFamily: 'PassionOne_400Regular',
@@ -184,26 +184,26 @@ const styles = StyleSheet.create({
   welcomeText: {
     fontSize: 28,
     fontWeight: '400',
-    color: '#03A903',
+    color: '#00510f',
     marginBottom: 8,
     fontFamily: 'PassionOne_400Regular',
   },
   subText: {
     fontSize: 16,
-    color: '#666',
+    color: '#00510f',
     textAlign: 'center',
     fontFamily: 'PassionOne_400Regular',
   },
   descriptionText: {
     fontSize: 20,
-    color: '#666',
+    color: '#00510f',
     textAlign: 'center',
     marginBottom: 30,
     lineHeight: 22,
     fontFamily: 'PassionOne_400Regular',
   },
   loginButton: {
-    backgroundColor: '#03A903',
+    backgroundColor: '#00510f',
     paddingHorizontal: 32,
     paddingVertical: 16,
     borderRadius: 12,
@@ -221,7 +221,7 @@ const styles = StyleSheet.create({
     fontFamily: 'PassionOne_400Regular',
   },
   syncButton: {
-    backgroundColor: '#03A903',
+    backgroundColor: '#00510f',
     paddingHorizontal: 40,
     paddingVertical: 18,
     borderRadius: 12,
@@ -251,7 +251,7 @@ const styles = StyleSheet.create({
     fontFamily: 'PassionOne_400Regular',
   },
   infoBox: {
-    backgroundColor: '#fff',
+    backgroundColor: '#f4f4f4',
     padding: 20,
     borderRadius: 12,
     borderWidth: 1,
@@ -261,13 +261,13 @@ const styles = StyleSheet.create({
   infoTitle: {
     fontSize: 18,
     fontWeight: '400',
-    color: '#333',
+    color: '#00510f',
     marginBottom: 12,
     fontFamily: 'PassionOne_400Regular',
   },
   infoText: {
     fontSize: 14,
-    color: '#666',
+    color: '#00510f',
     marginBottom: 6,
     fontFamily: 'PassionOne_400Regular',
     lineHeight: 20,

@@ -680,7 +680,7 @@ export default function Index() {
     expDate.setHours(0, 0, 0, 0);
     const daysUntil = Math.ceil((expDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 
-    if (daysUntil <= 0) return '#FF0000'; // Red - expired or expiring today
+    if (daysUntil <= 0) return '#b00020'; // Dark red - expired or expiring today
     if (daysUntil === 1) return '#FF4500'; // Dark orange - 1 day
     if (daysUntil === 2) return '#FF8C00'; // Orange - 2 days
     if (daysUntil === 3) return '#FFD700'; // Yellow/Gold - 3 days
@@ -1273,7 +1273,7 @@ export default function Index() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f8f8',
+    backgroundColor: '#ffffff',
   },
   centerContainer: {
     flex: 1,
@@ -1282,7 +1282,7 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   header: {
-    backgroundColor: '#03A903',
+    backgroundColor: '#00510f',
     paddingTop: 60,
     paddingBottom: 20,
     paddingHorizontal: 20,
@@ -1332,7 +1332,7 @@ const styles = StyleSheet.create({
     fontFamily: 'PassionOne_400Regular',
   },
   sortButtonTextActive: {
-    color: '#03A903',
+    color: '#00510f',
   },
   listContainer: {
     padding: 16,
@@ -1373,7 +1373,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#999',
   },
   deleteSelectButton: {
-    backgroundColor: '#FF3B30',
+    backgroundColor: '#b00020',
   },
   selectionActionText: {
     color: '#fff',
@@ -1399,14 +1399,14 @@ const styles = StyleSheet.create({
     height: 24,
     borderRadius: 6,
     borderWidth: 2,
-    borderColor: '#03A903',
+    borderColor: '#00510f',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 10,
     marginTop: 28,
   },
   checkboxSelected: {
-    backgroundColor: '#03A903',
+    backgroundColor: '#00510f',
   },
   checkboxTick: {
     color: '#fff',
@@ -1466,7 +1466,7 @@ const styles = StyleSheet.create({
   },
   alertDaysText: {
     fontSize: 13,
-    color: '#03A903',
+    color: '#00510f',
     marginBottom: 2,
     fontFamily: 'PassionOne_400Regular',
   },
@@ -1496,7 +1496,7 @@ const styles = StyleSheet.create({
     fontFamily: 'PassionOne_400Regular',
   },
   optionButton: {
-    backgroundColor: '#03A903',
+    backgroundColor: '#00510f',
     padding: 16,
     borderRadius: 10,
     marginBottom: 12,
@@ -1508,7 +1508,7 @@ const styles = StyleSheet.create({
     fontFamily: 'PassionOne_400Regular',
   },
   deleteOptionButton: {
-    backgroundColor: '#FF3B30',
+    backgroundColor: '#b00020',
   },
   deleteOptionText: {
     color: '#fff',
@@ -1568,7 +1568,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#999',
   },
   saveButton: {
-    backgroundColor: '#03A903',
+    backgroundColor: '#00510f',
   },
   modalButtonText: {
     color: '#fff',
@@ -1597,10 +1597,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   qtyPlus: {
-    backgroundColor: '#03A903',
+    backgroundColor: '#00510f',
   },
   qtyMinus: {
-    backgroundColor: '#FF3B30',
+    backgroundColor: '#b00020',
   },
   qtyButtonText: {
     color: '#fff',

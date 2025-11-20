@@ -30,22 +30,27 @@ export default function Index() {
     };
 
     // Create dynamic styles based on font loading
+    const primaryGreen = '#00510f';
+    const lightGrey = '#e0e0e0';
+
     const getStyles = () => StyleSheet.create({
         pageContainer: {
             flex: 1,
             alignItems: "center",
             justifyContent: "flex-start",
             paddingTop: 60,
-            backgroundColor: "#f8f8f8ff",
+            backgroundColor: "#ffffff",
         },
         loginHeaderContainer: {
             alignItems: "center",
             justifyContent: "center",
-            marginBottom: 40,
+            marginBottom: 20,
         },
         loginHeaderText: {
             fontSize: 30,
-            fontWeight: "bold"
+            fontWeight: "400",
+            color: primaryGreen,
+            fontFamily: fontsLoaded ? 'PassionOne_400Regular' : 'System',
         },
         textboxContainer: {
             marginTop: 50,
@@ -54,13 +59,13 @@ export default function Index() {
         },
         textbox: {
             width: 300,
-            height: 50,
-            borderColor: '#03A903',
+            height: 60,
+            borderColor: primaryGreen,
             borderWidth: 3,
             marginBottom: 10,
             padding: 10,
-            borderRadius: 8,
-            backgroundColor: "#D9D9D9",
+            borderRadius: 14,
+            backgroundColor: lightGrey,
             textAlign: 'center',
             fontFamily: fontsLoaded ? 'PassionOne_400Regular' : 'System',
             fontWeight: '400',
@@ -68,10 +73,10 @@ export default function Index() {
             lineHeight: 28,
         },
         loginButton: {
-            backgroundColor: "#03A903",
+            backgroundColor: primaryGreen,
             paddingVertical: 16,
             paddingHorizontal: 80,
-            borderRadius: 8,
+            borderRadius: 14,
             alignItems: "center",
             justifyContent: "center",
             marginTop: 10,
@@ -88,8 +93,9 @@ export default function Index() {
             marginBottom: 10,
         },
         forgotPasswordText: {
-            color: "gray",
-            textDecorationLine: "underline"
+            color: primaryGreen,
+            textDecorationLine: "underline",
+            fontFamily: fontsLoaded ? 'PassionOne_400Regular' : 'System',
         },
         signUpContainer:{
             marginTop: 20,

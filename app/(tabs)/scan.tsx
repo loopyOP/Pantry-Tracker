@@ -638,7 +638,7 @@ const styles = StyleSheet.create({
   manualButton: {
     position: 'absolute',
     bottom: 80,
-    backgroundColor: '#03A903',
+    backgroundColor: '#00510f',
     paddingVertical: 12,
     paddingHorizontal: 20,
     borderRadius: 28,
@@ -721,7 +721,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   primaryButton: {
-    backgroundColor: '#03A903',
+    backgroundColor: '#00510f',
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 8,
@@ -733,13 +733,13 @@ const styles = StyleSheet.create({
   },
   primaryOutlineButton: {
     borderWidth: 1,
-    borderColor: '#03A903',
+    borderColor: '#00510f',
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 8,
   },
   primaryOutlineButtonText: {
-    color: '#03A903',
+    color: '#00510f',
     fontSize: 14,
     fontFamily: 'PassionOne_400Regular',
   },
@@ -774,7 +774,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   iosPickerCancel: { backgroundColor: '#999' },
-  iosPickerDone: { backgroundColor: '#03A903' },
+  iosPickerDone: { backgroundColor: '#00510f' },
   iosPickerButtonText: { color: '#fff', fontSize: 16, fontFamily: 'PassionOne_400Regular' },
   errorContainer: {
     alignItems: 'center',
@@ -950,7 +950,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   qtyScanMinus: { backgroundColor: '#FF3B30' },
-  qtyScanPlus: { backgroundColor: '#03A903' },
+  qtyScanPlus: { backgroundColor: '#00510f' },
   qtyScanButtonText: { color: '#fff', fontSize: 18, fontWeight: '700' },
   qtyScanValue: { fontSize: 16, fontWeight: '700', color: '#333', minWidth: 24, textAlign: 'center' },
   actionButtons: {
@@ -961,7 +961,7 @@ const styles = StyleSheet.create({
   },
   saveButton: {
     flex: 1,
-    backgroundColor: '#03A903',
+    backgroundColor: '#00510f',
     paddingVertical: 14,
     borderRadius: 10,
     alignItems: 'center',
@@ -979,7 +979,7 @@ const styles = StyleSheet.create({
   },
   cancelButton: {
     flex: 1,
-    backgroundColor: '#FF3B30',
+    backgroundColor: '#b00020',
     paddingVertical: 14,
     borderRadius: 10,
     alignItems: 'center',
@@ -1044,7 +1044,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   manualCancelBtn: { backgroundColor: '#999' },
-  manualLookupBtn: { backgroundColor: '#03A903' },
+  manualLookupBtn: { backgroundColor: '#00510f' },
   manualActionText: {
     color: '#fff',
     fontSize: 16,
