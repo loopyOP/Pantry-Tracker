@@ -101,6 +101,55 @@ export default function Index() {
             marginTop: 20,
             alignItems: "center",
             justifyContent: "center"
+        },
+        authSwitchContainer: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginTop: 28,
+            gap: 8
+        },
+        authSwitchPrompt: {
+            fontSize: 14,
+            color: '#333',
+            fontFamily: fontsLoaded ? 'PassionOne_400Regular' : 'System',
+            fontWeight: '400'
+        },
+        authSwitchButton: {
+            borderColor: primaryGreen,
+            borderWidth: 2,
+            paddingVertical: 6,
+            paddingHorizontal: 16,
+            borderRadius: 20,
+            backgroundColor: '#ffffff',
+        },
+        authSwitchButtonText: {
+            fontSize: 14,
+            color: primaryGreen,
+            fontFamily: fontsLoaded ? 'PassionOne_400Regular' : 'System',
+            fontWeight: '600'
+        },
+        statusContainer: {
+            marginTop: 12,
+            paddingVertical: 10,
+            paddingHorizontal: 14,
+            borderRadius: 10,
+            minHeight: 44,
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderWidth: 2,
+            borderColor: primaryGreen,
+            backgroundColor: '#f5fff5'
+        },
+        statusText: {
+            color: primaryGreen,
+            fontSize: 14,
+            fontFamily: fontsLoaded ? 'PassionOne_400Regular' : 'System'
+        },
+        statusError: {
+            color: '#b00020',
+            fontSize: 14,
+            fontFamily: fontsLoaded ? 'PassionOne_400Regular' : 'System'
         }
     });
 
@@ -165,29 +214,33 @@ export default function Index() {
                                 <Text style={styles.forgotPasswordText}>Forgot password?</Text>
                             </Link>
                         </View>
-                            <Pressable
-                                style={styles.loginButton}
-                                onPress={handleSubmit as any}
-                                disabled={!isValid}
-                            >
-                                <Text style={styles.loginButtonText}>sign in</Text>
-                            </Pressable>
-                            {loginMutation.isPending && <Text>⏳ Logging in...</Text>}
-                            {loginMutation.isSuccess && <Text>✅ Logged in!</Text>}
-                            {loginMutation.isError && (
-                            <Text style={{ color: "red" }}>
-                                ❌ {(loginMutation.error as Error).message}
-                            </Text>
-                            )}
+                                                        <Pressable
+                                                                style={[styles.loginButton, loginMutation.isPending && { opacity: 0.6 }]}
+                                                                onPress={handleSubmit as any}
+                                                                disabled={!isValid || loginMutation.isPending}
+                                                        >
+                                                                <Text style={styles.loginButtonText}>{loginMutation.isPending ? 'signing in…' : 'sign in'}</Text>
+                                                        </Pressable>
+                                                        {(loginMutation.isPending || loginMutation.isError) && (
+                                                            <View style={styles.statusContainer}>
+                                                                {loginMutation.isPending && (
+                                                                    <Text style={styles.statusText}>⏳ Verifying credentials…</Text>
+                                                                )}
+                                                                {loginMutation.isError && (
+                                                                    <Text style={styles.statusError}>❌ {(loginMutation.error as Error).message}</Text>
+                                                                )}
+                                                            </View>
+                                                        )}
                     </View>
                 )}
             </Formik>
-            <View style={styles.signUpContainer}>
-                <Text>Don't have an account?
-                    <Link href="./register" asChild>
-                        <Text style={{ color: 'blue' , textDecorationLine: 'underline'}}> Sign Up</Text>
-                    </Link>
-                </Text>
+            <View style={styles.authSwitchContainer}>
+                <Text style={styles.authSwitchPrompt}>Don't have an account?</Text>
+                <Link href="./register" asChild>
+                    <Pressable style={styles.authSwitchButton}>
+                        <Text style={styles.authSwitchButtonText}>Create one</Text>
+                    </Pressable>
+                </Link>
             </View>
         </View>
         </View>

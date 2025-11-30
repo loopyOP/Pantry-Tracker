@@ -16,7 +16,13 @@ export function useLogin() {
     onSuccess: async (data) => {
       await SecureStore.setItemAsync("auth_token", data.token);
       setToken(data.token);
-      //Alert.alert("✅ Login Successful");
+      // Dismiss any open modals before navigating to profile (Expo Router v3+)
+      try {
+        const anyRouter = router as any;
+        if (typeof anyRouter.dismissAll === "function") {
+          anyRouter.dismissAll();
+        }
+      } catch {}
       router.replace("/(tabs)/profile");
     },
     onError: (error: any) => {

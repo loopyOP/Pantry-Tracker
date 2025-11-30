@@ -5,6 +5,8 @@ import { Image } from 'expo-image';
 import { Formik } from 'formik';
 import * as yup from 'yup';
 import { useRegister } from '@/hooks/useRegister';
+import { useLogin } from '@/hooks/useLogin';
+import { PressableStateCallbackType } from 'react-native';
 import { useFonts, PassionOne_400Regular } from '@expo-google-fonts/passion-one';
 
 const registerValidationSchema = yup.object().shape({
@@ -31,9 +33,15 @@ export default function RegisterScreen() {
         PassionOne_400Regular,
     });
 
-    const registerMutation = useRegister();
+    const loginMutation = useLogin();
+    const registerMutation = useRegister(
+        (_data, variables) => {
+            // Automatically initiate login using registered credentials
+            loginMutation.mutate({ email: variables.email, password: variables.password });
+        }
+    );
     const handleSubmit = (values: { email: string; username: string; password: string; confirmPassword: string }) => {
-        registerMutation.mutate(values);
+        registerMutation.mutate({ email: values.email, username: values.username, password: values.password });
     };
 
     // Create dynamic styles based on font loading
@@ -103,6 +111,60 @@ export default function RegisterScreen() {
             marginTop: 20,
             alignItems: "center",
             justifyContent: "center"
+        },
+        authSwitchContainer: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginTop: 32,
+            gap: 8
+        },
+        authSwitchPrompt: {
+            fontSize: 14,
+            color: '#333',
+            fontFamily: fontsLoaded ? 'PassionOne_400Regular' : 'System',
+            fontWeight: '400'
+        },
+        authSwitchButton: {
+            borderColor: primaryGreen,
+            borderWidth: 2,
+            paddingVertical: 6,
+            paddingHorizontal: 16,
+            borderRadius: 20,
+            backgroundColor: '#ffffff',
+        },
+        authSwitchButtonText: {
+            fontSize: 14,
+            color: primaryGreen,
+            fontFamily: fontsLoaded ? 'PassionOne_400Regular' : 'System',
+            fontWeight: '600'
+        },
+        statusContainer: {
+            marginTop: 12,
+            paddingVertical: 10,
+            paddingHorizontal: 14,
+            borderRadius: 10,
+            minHeight: 44,
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderWidth: 2,
+            borderColor: primaryGreen,
+            backgroundColor: '#f5fff5'
+        },
+        statusText: {
+            color: primaryGreen,
+            fontSize: 14,
+            fontFamily: fontsLoaded ? 'PassionOne_400Regular' : 'System'
+        },
+        statusError: {
+            color: '#b00020',
+            fontSize: 14,
+            fontFamily: fontsLoaded ? 'PassionOne_400Regular' : 'System'
+        },
+        statusWarning: {
+            color: '#b36b00',
+            fontSize: 14,
+            fontFamily: fontsLoaded ? 'PassionOne_400Regular' : 'System'
         }
     });
 
@@ -177,29 +239,38 @@ export default function RegisterScreen() {
                             style={styles.textbox}
                         />
                         {errors.confirmPassword && <Text style={styles.errorText}>{errors.confirmPassword}</Text>}
-                        <Pressable
-                            style={styles.registerButton}
-                            onPress={handleSubmit as any}
-                            disabled={!isValid}
-                        >
-                            <Text style={styles.registerButtonText}>register</Text>
-                        </Pressable>
-                        {registerMutation.isPending && <Text>⏳ Registering...</Text>}
-                        {registerMutation.isSuccess && <Text>✅ Registered!</Text>}
-                        {registerMutation.isError && (
-                        <Text style={{ color: "red" }}>
-                            ❌ {(registerMutation.error as Error).message}
-                        </Text>
-                        )}
+                                                <Pressable
+                                                        style={[styles.registerButton, (registerMutation.isPending || loginMutation.isPending) && { opacity: 0.6 }]}
+                                                        onPress={handleSubmit as any}
+                                                        disabled={!isValid || registerMutation.isPending || loginMutation.isPending}
+                                                >
+                                                        <Text style={styles.registerButtonText}>
+                                                                {registerMutation.isPending || loginMutation.isPending ? 'creating...' : 'register'}
+                                                        </Text>
+                                                </Pressable>
+                                                {(registerMutation.isPending || loginMutation.isPending || registerMutation.isError || (registerMutation.isSuccess && loginMutation.isError)) && (
+                                                    <View style={styles.statusContainer}>
+                                                        { (registerMutation.isPending || loginMutation.isPending) && (
+                                                            <Text style={styles.statusText}>⏳ Creating account & signing in…</Text>
+                                                        )}
+                                                        { registerMutation.isError && (
+                                                            <Text style={styles.statusError}>❌ {(registerMutation.error as Error).message}</Text>
+                                                        )}
+                                                        { registerMutation.isSuccess && loginMutation.isError && (
+                                                            <Text style={styles.statusWarning}>⚠ Registered, but login failed: {(loginMutation.error as Error).message}</Text>
+                                                        )}
+                                                    </View>
+                                                )}
                     </View>
                 )}
             </Formik>
-            <View style={styles.signInContainer}>
-                <Text>Already have an account?
-                    <Link href="/login" asChild>
-                        <Text style={{ color: 'blue', textDecorationLine: 'underline' }}> Sign In</Text>
-                    </Link>
-                </Text>
+            <View style={styles.authSwitchContainer}>
+                <Text style={styles.authSwitchPrompt}>Already have an account?</Text>
+                <Link href="/login" asChild>
+                    <Pressable style={styles.authSwitchButton}>
+                        <Text style={styles.authSwitchButtonText}>Sign in</Text>
+                    </Pressable>
+                </Link>
             </View>
         </View>
     </View>
