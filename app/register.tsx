@@ -37,13 +37,16 @@ export default function RegisterScreen() {
     };
 
     // Create dynamic styles based on font loading
+    const primaryGreen = '#00510f';
+    const lightGrey = '#e0e0e0';
+
     const getStyles = () => StyleSheet.create({
         pageContainer: {
             flex: 1,
             alignItems: "center",
             justifyContent: "flex-start",
             paddingTop: 60,
-            backgroundColor: "#f8f8f8ff",
+            backgroundColor: "#ffffff",
         },
         registerHeaderContainer: {
             alignItems: "center",
@@ -52,7 +55,9 @@ export default function RegisterScreen() {
         },
         registerHeaderText: {
             fontSize: 30,
-            fontWeight: "bold"
+            fontWeight: "400",
+            color: primaryGreen,
+            fontFamily: fontsLoaded ? 'PassionOne_400Regular' : 'System',
         },
         textboxContainer: {
             marginTop: 50,
@@ -62,12 +67,12 @@ export default function RegisterScreen() {
         textbox: {
             width: 300,
             height: 50,
-            borderColor: '#03A903',
+            borderColor: primaryGreen,
             borderWidth: 3,
             marginBottom: 10,
             padding: 10,
             borderRadius: 8,
-            backgroundColor: "#D9D9D9",
+            backgroundColor: lightGrey,
             textAlign: 'center',
             fontFamily: fontsLoaded ? 'PassionOne_400Regular' : 'System',
             fontWeight: '400',
@@ -75,7 +80,7 @@ export default function RegisterScreen() {
             lineHeight: 28,
         },
         registerButton: {
-            backgroundColor: "#03A903",
+            backgroundColor: primaryGreen,
             paddingVertical: 16,
             paddingHorizontal: 80,
             borderRadius: 8,
