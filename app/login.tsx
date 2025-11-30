@@ -1,4 +1,4 @@
-import { Text, View, StyleSheet, Pressable, TextInput, ScrollView} from 'react-native';
+import { Text, View, StyleSheet, Pressable, TextInput, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import React from 'react';
 import { Link } from 'expo-router';
 import { Image } from 'expo-image';
@@ -115,9 +115,14 @@ export default function Index() {
         );
     }
     
-    return (
-    <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
-    <View style={styles.pageContainer}>
+        return (
+        <KeyboardAvoidingView
+            style={{ flex: 1 }}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 0}
+        >
+        <ScrollView contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled">
+        <View style={styles.pageContainer}>
         <View style={styles.loginHeaderContainer}>
             <Image source={require('@assets/icons/pantry-guard-logo.png')} style={{width: 200, height: 200}} />
         </View>
@@ -185,7 +190,8 @@ export default function Index() {
                 </Text>
             </View>
         </View>
-    </View>
-    </ScrollView>
+        </View>
+        </ScrollView>
+        </KeyboardAvoidingView>
   );
 }
