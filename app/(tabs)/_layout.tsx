@@ -18,11 +18,19 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="Scan"
+        name="scan"
         options={{
           title: 'Scan',
           headerShown: false,
           tabBarIcon: ({ color }) => <AntDesign name="scan" size={28} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: 'Profile',
+          headerShown: false,
+          tabBarIcon: ({ color }) => <AntDesign name="user" size={28} color={color} />,
         }}
       />
     </Tabs>
